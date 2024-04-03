@@ -230,6 +230,7 @@ iupdate(struct inode *ip)
 	dip->nlink = ip->nlink;
 	dip->size = ip->size;
 	memmove(dip->addrs, ip->addrs, sizeof(ip->addrs));
+	memmove(dip->symlink, ip->symlink, sizeof(ip->symlink));
 	log_write(bp);
 	brelse(bp);
 }
@@ -303,6 +304,7 @@ ilock(struct inode *ip)
 		ip->nlink = dip->nlink;
 		ip->size = dip->size;
 		memmove(ip->addrs, dip->addrs, sizeof(ip->addrs));
+		memmove(ip->symlink, dip->symlink, sizeof(ip->symlink));
 		brelse(bp);
 		ip->valid = 1;
 		if(ip->type == 0)
@@ -367,17 +369,23 @@ iunlockput(struct inode *ip)
 
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
+// 
+// Funkciji prosledjujemo memorijski i node, i broj bloka koji selimo da procitamo
 static uint
 bmap(struct inode *ip, uint bn)
 {
 	uint addr, *a;
 	struct buf *bp;
 
+	// Ako smo u prvih 12 citamo
 	if(bn < NDIRECT){
 		if((addr = ip->addrs[bn]) == 0)
+			// Balloc nalazi slobodan blok na disku
 			ip->addrs[bn] = addr = balloc(ip->dev);
 		return addr;
 	}
+	// Ako nismo u prvih 12, skidamo 12 sa broja bloka
+	// I znamo da smo u indirektnom bloku
 	bn -= NDIRECT;
 
 	if(bn < NINDIRECT){
@@ -432,6 +440,20 @@ itrunc(struct inode *ip)
 	iupdate(ip);
 }
 
+// Calculate the number of blocks for a given file size
+uint
+file_blocks(uint size)
+{
+	if (BSIZE * NDIRECT >= size) {
+		int blocks = size / BSIZE;
+		return size % BSIZE == 0 ? blocks : blocks + 1; 
+    }
+
+	int lo = size - NDIRECT * BSIZE;
+	int blocks = lo / BSIZE;
+	return NDIRECT + 1 + (lo % BSIZE == 0 ? blocks : blocks + 1);
+}
+
 // Copy stat information from inode.
 // Caller must hold ip->lock.
 void
@@ -442,6 +464,8 @@ stati(struct inode *ip, struct stat *st)
 	st->type = ip->type;
 	st->nlink = ip->nlink;
 	st->size = ip->size;
+	st->blocks = file_blocks(ip->size);
+	memmove(st->symlink, ip->symlink, sizeof(ip->symlink));
 }
 
 // Read data from inode.
@@ -631,6 +655,8 @@ namex(char *path, int nameiparent, char *name)
 			iunlockput(ip);
 			return 0;
 		}
+		// Ako je tip sym link i ako jeste citao tu putanju
+		// I nastavio rekurzivnu pretragu sa te tacke
 		if(nameiparent && *path == '\0'){
 			// Stop one level early.
 			iunlock(ip);

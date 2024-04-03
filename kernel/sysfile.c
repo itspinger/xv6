@@ -282,6 +282,30 @@ create(char *path, short type, short major, short minor)
 }
 
 int
+sys_symlink(void)
+{
+	char *dest, *path;
+
+	struct inode *ip;
+	if (argstr(0, &dest) < 0 || argstr(1, &path) < 0) {
+		return -1;
+	}
+
+	begin_op();
+	ip = create(path, T_SYMLINK, 0, 0);
+	if (ip == 0) {
+		end_op();
+		return -1;
+	}
+
+	iunlock(ip);
+	safestrcpy(ip->symlink, dest, sizeof(ip->symlink));
+	iupdate(ip);
+	end_op();
+	return 0;
+}
+
+int
 sys_open(void)
 {
 	char *path;
@@ -306,10 +330,53 @@ sys_open(void)
 			return -1;
 		}
 		ilock(ip);
-		if(ip->type == T_DIR && omode != O_RDONLY){
+		if(ip->type == T_DIR && !(omode & O_NOFOLLOW)){
 			iunlockput(ip);
 			end_op();
 			return -1;
+		}
+
+		if (!(omode & O_NOFOLLOW)) {
+			struct inode* lnk = ip;
+			struct inode* vis[10];
+			int i = 0;
+			while (lnk->type == T_SYMLINK && i < 10) {
+				if ((lnk=namei(lnk->symlink)) == 0) {
+					iunlock(ip); // Dodaj ovde
+					end_op();
+					return -1;
+				}
+
+				for (int j = 0; j < i; j++) {
+					if (vis[j]->dev == lnk->dev && vis[j]->inum == lnk->inum) {
+						cprintf("namex: recursion detected\n");
+						iunlock(ip); // Dodaj ovde
+						end_op();
+						return -1;
+					}
+				}
+
+				vis[i++] = lnk;
+			}
+					
+			if (i >= 10) {
+				cprintf("namex: recursion depth exceded");
+				iunlockput(ip); // Dodaj ovde
+				end_op();
+				return -1;
+			}
+
+			if (lnk->type == T_DIR) {
+				iunlockput(ip);
+				end_op();
+				return -1;
+			}
+
+			if (ip != lnk) {
+				iunlock(ip);
+				ip = lnk;
+				ilock(ip);
+			}
 		}
 	}
 

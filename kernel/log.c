@@ -210,23 +210,33 @@ commit()
 //   modify bp->data[]
 //   log_write(bp)
 //   brelse(bp)
+//
+// Ovo je i ujedno najbitnije kod log.c (zamenjuje bwrite)
+// Log write nam zamenjuje bwritove
+// Umesto da pisemo direktno u bafer i da onda zapisujemo na disk]
+// Mi cemo reci logu da zapise taj bafer i onda ce se kasnije zapisivati na disk
 void
 log_write(struct buf *b)
 {
 	int i;
 
+	// Da li ima mesta na logu
 	if (log.lh.n >= LOGSIZE || log.lh.n >= log.size - 1)
 		panic("too big a transaction");
+	// Da li smo van tranzakcije (treba pre ovoga da se zove begin_op)
 	if (log.outstanding < 1)
 		panic("log_write outside of trans");
 
-	acquire(&log.lock);
+	acquire(&log.lock); // Uzimamo log lock koji nam brani log header
+	// Prolazimo kroz log, vidimo da li imamo vec isti blok
+	// Ukoliko imamo, uzimamo to mesto i zapisujemo tu
 	for (i = 0; i < log.lh.n; i++) {
 		if (log.lh.block[i] == b->blockno)   // log absorbtion
 			break;
 	}
+	// Prekopiramo broj podatka u koji pisemo u log
 	log.lh.block[i] = b->blockno;
-	if (i == log.lh.n)
+	if (i == log.lh.n) // Ako smo dosli do kraja, povecamo velicinu niza
 		log.lh.n++;
 	b->flags |= B_DIRTY; // prevent eviction
 	release(&log.lock);

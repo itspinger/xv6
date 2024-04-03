@@ -1,0 +1,16 @@
+Vezbe 4:
+XV6 ima diskove i fajl sisteme (ne radi sa particijama)
+Blok je fizicki blok na disku i njegova velicina je 512 bajtova uvek!!!! (1 blok)
+Disk XV6 je podeljen na sledece oblasti:
+    1. Boot block - sadrzi kod za startovanje sistema (skoro 512 bajtova, oko 508)
+    2. Super block - sadrzi opis narednih oblasti (meta podatke o file sistemu)
+    3. Log - Cuvamo tranzakcije file sistema (poenta loga jeste da u slucaju nestanka struje npr, da se potpune diska dese ili potpuno ili nikako)
+    4. Inode - to su ustvari fajlovi na disku (opisuju meta podatke fajlova i gde se nalaze)
+    5. Bit map - oblast u kojoj je zapisano koji blokovi diska su zauzeti a koji su slobodni
+    6. Data
+Operativni sistem xv6 takodje obavlja kesiranje podataka sa diska. Cilj je da se izbegne citanje podataka sa diska za koje znamo da se nisu promenili. Blokovi procitani sa diska se drze u bafera, u okviru kojeg takodje imamo markere koji naznacavaju da li je neki proces izmeni neki od blokova.
+Kada neki proces hoce da procita blok, ako ga imamo u kesu i znamo da nije menjan, mozemo bezbedno da iskoristimo te podatke, i ne moramo da zapravo vrsimo fizicko citanje sa diska. Logika se nalazi u kernel/bio.c
+Postoje dve C strukture koje se koriste da opisu inode u xv6 sistemu:
+    1. kernel/fs.h - struct dinode - inode kada je zapisan na disku
+    2. kernel/file.h - struct inode - inode kada je ucitan u memoriju
+U oba slucaja je kljucan niz addrs koji sadrzi adrese blokova u kojima je zapisana datoteka koji opisuje ovaj inode

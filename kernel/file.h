@@ -10,6 +10,7 @@ struct file {
 
 
 // in-memory copy of an inode
+// Za razliku od dinode-a, inode se nalazi u memoriji
 struct inode {
 	uint dev;           // Device number
 	uint inum;          // Inode number
@@ -23,6 +24,9 @@ struct inode {
 	short nlink;
 	uint size;
 	uint addrs[NDIRECT+1];
+
+	// Dodati taj smylink
+	char symlink[128];
 };
 
 // table mapping major device number to

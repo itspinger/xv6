@@ -32,14 +32,17 @@ idtinit(void)
 	lidt(idt, sizeof(idt));
 }
 
+// Ovde se zapravo izvrsava sistemski poziv
 void
 trap(struct trapframe *tf)
 {
+	// Proverava da li je sistemski poziv
 	if(tf->trapno == T_SYSCALL){
+		// Proverava da li je proces ubijen
 		if(myproc()->killed)
 			exit();
 		myproc()->tf = tf;
-		syscall();
+		syscall(); // Zove sistemski poziv
 		if(myproc()->killed)
 			exit();
 		return;

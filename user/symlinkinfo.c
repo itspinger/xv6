@@ -23,7 +23,7 @@ fmtname(char *path)
 }
 
 void
-ls(char *path)
+symlinkinfo(char *path)
 {
 	char buf[512], *p;
 	int fd;
@@ -31,21 +31,19 @@ ls(char *path)
 	struct stat st;
 
 	if((fd = open(path, 1024)) < 0){
-		fprintf(2, "ls: cannot open %s\n", path);
+		fprintf(2, "symlinkinfo: cannot open %s\n", path);
 		return;
 	}
 
 	if(fstat(fd, &st) < 0){
-		fprintf(2, "ls: cannot stat %s\n", path);
+		fprintf(2, "symlinkinfo: cannot stat %s\n", path);
 		close(fd);
 		return;
 	}
 
 	switch(st.type){
 	case T_SYMLINK:
-		printf("%s %d %d %d %d -> %s\n", fmtname(path), st.type, st.ino, st.size, st.blocks, st.symlink);
-	case T_FILE:
-		printf("%s %d %d %d %d\n", fmtname(path), st.type, st.ino, st.size, st.blocks);
+		printf("%s -> %s\n", fmtname(path), st.symlink);
 		break;
 	case T_DIR:
 		if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
@@ -64,10 +62,10 @@ ls(char *path)
 				printf("ls: cannot stat %s\n", buf);
 				continue;
 			}
-			if (st.type == T_SYMLINK) 
-				printf("%s %d %d %d %d-> %s\n", fmtname(path), st.type, st.ino, st.size, st.blocks, st.symlink);
-			else
-				printf("%s %d %d %d %d\n", fmtname(buf), st.type, st.ino, st.size, st.blocks);
+            if (st.type != T_SYMLINK) {
+                continue;
+            }
+			printf("%s -> %s\n", fmtname(buf), st.symlink);
 		}
 		break;
 	}
@@ -80,10 +78,10 @@ main(int argc, char *argv[])
 	int i;
 
 	if(argc < 2){
-		ls(".");
+		symlinkinfo(".");
 		exit();
 	}
 	for(i=1; i<argc; i++)
-		ls(argv[i]);
+		symlinkinfo(argv[i]);
 	exit();
 }
