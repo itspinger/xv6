@@ -26,6 +26,7 @@ main(void)
 
 	for(;;){
 		printf("init: starting sh\n");
+		// Kreira novi proces
 		pid = fork();
 		if(pid < 0){
 			printf("init: fork failed\n");
@@ -33,9 +34,12 @@ main(void)
 		}
 		if(pid == 0){
 			exec("/bin/sh", argv);
+			// Pokrece bin/sh
 			printf("init: exec sh failed\n");
 			exit();
 		}
+		// Onda ceka da se proces zavrsi
+		// I kada se zavrsi, radi opet
 		while((wpid=wait()) >= 0 && wpid != pid)
 			printf("zombie!\n");
 	}

@@ -71,6 +71,9 @@ myproc(void)
 // If found, change state to EMBRYO and initialize
 // state required to run in the kernel.
 // Otherwise return 0.
+//
+// Trazi neiskorisceni proces
+// I inicijalizuje ga da bi mogao da se izvrsi na kernelu
 static struct proc*
 allocproc(void)
 {
@@ -79,6 +82,7 @@ allocproc(void)
 
 	acquire(&ptable.lock);
 
+	// Trazimo taj proces
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
 		if(p->state == UNUSED)
 			goto found;
@@ -87,47 +91,76 @@ allocproc(void)
 	return 0;
 
 found:
+	// Nasli smo proces
 	p->state = EMBRYO;
 	p->pid = nextpid++;
 
 	release(&ptable.lock);
 
 	// Allocate kernel stack.
+	// Alociramo kernelski stack
 	if((p->kstack = kalloc()) == 0){
+		// Ako se desi greska stavimo ga kao nekoriscenog
+		// I vracamo u tabelu
+		// Da moze neko drugi da iskoristi
 		p->state = UNUSED;
 		return 0;
 	}
+	// Stavljamo da stack pointer bude kstack + KSTACKSIZE
+	// KSTACKSIZE je jedna stranica u memoriji??
+	// kalloc() takodje vraca jednu stranicu memorije
+	// Na kraj te stranice stavljamo pokazivac sp
+	// Zato sto stack raste na dole
 	sp = p->kstack + KSTACKSIZE;
 
 	// Leave room for trap frame.
+	// Dodajemo trap frame na stack pointer
+	// Tj smanjujemo sp za velicinu trapframa
 	sp -= sizeof *p->tf;
-	p->tf = (struct trapframe*)sp;
+	p->tf = (struct trapframe*)sp; // Uzimamo trapframe, pretvaramo ga u sp
+	// I cuvamo u p->tf strukture proc
 
 	// Set up new context to start executing at forkret,
 	// which returns to trapret.
+	// Trap ret je funkcija koja ce da ucita trapframe
+	// I kraj trep funkcije
 	sp -= 4;
-	*(uint*)sp = (uint)trapret;
+	*(uint*)sp = (uint)trapret; // Koristimo trapret
+	// To je deo trepa
+	// Koji ce da ucita celo stanje iz trapframe-a
+	// I vracamo se na userspace
 
+	// Nakon svega toga, stavljamo kontekst
+	// Zato sto hocemo da zapisemo gde skacemo
+	// Da bismo nastavili izvrsavanje
 	sp -= sizeof *p->context;
 	p->context = (struct context*)sp;
 	memset(p->context, 0, sizeof *p->context);
+	// Po defaultu, skacemo na
+	// Forkret je bukvalno prazna funkcija
 	p->context->eip = (uint)forkret;
 
 	return p;
 }
 
 // Set up first user process.
+// Koren stabla nastaje u ovoj funkciji
 void
 userinit(void)
 {
 	struct proc *p;
 	extern char _binary_user_initcode_start[], _binary_user_initcode_size[];
 
+	// Zove se alloc
+	// Tj alociramo novi proces
 	p = allocproc();
 
+	// Sacuvacemo ga u globalnu promenljivu initproc
 	initproc = p;
+	// Postavlja kernelski deo stranicne tabele
 	if((p->pgdir = setupkvm()) == 0)
 		panic("userinit: out of memory?");
+	// Inicijalizuje korisnicku virtuelnu memoriju
 	inituvm(p->pgdir, _binary_user_initcode_start, (int)_binary_user_initcode_size);
 	p->sz = PGSIZE;
 	memset(p->tf, 0, sizeof(*p->tf));
@@ -177,6 +210,11 @@ growproc(int n)
 // Create a new process copying p as the parent.
 // Sets up stack to return as if from system call.
 // Caller must set state of returned proc to RUNNABLE.
+//
+// Fork pravi novi procese kopirajuci stare
+// Zove se fork zato sto zapravo to kopiranje izgleda kao fork
+// Postavlja mu stek tako da se vrati iz sistemskog poziva
+// Stavlja mu state na runnable
 int
 fork(void)
 {
@@ -185,35 +223,45 @@ fork(void)
 	struct proc *curproc = myproc();
 
 	// Allocate process.
+	// Allocproc alocira novi kernelski stek
 	if((np = allocproc()) == 0){
 		return -1;
 	}
 
 	// Copy process state from proc.
+	// Kopiramo celu virtuelnu memoriju
 	if((np->pgdir = copyuvm(curproc->pgdir, curproc->sz)) == 0){
 		kfree(np->kstack);
 		np->kstack = 0;
 		np->state = UNUSED;
 		return -1;
 	}
+	// Kopiramo velicinu starog procesa u novi
+	// Stavljamo mu parent, i kopiramo trapframe (stanje procesas)
 	np->sz = curproc->sz;
 	np->parent = curproc;
 	*np->tf = *curproc->tf;
 
 	// Clear %eax so that fork returns 0 in the child.
+	// Zbog ove linije kada zovemo fork() ono vraca 2 vrednosti
 	np->tf->eax = 0;
 
+	// Kopiramo sve fajlove koje smo otvorili
 	for(i = 0; i < NOFILE; i++)
 		if(curproc->ofile[i])
+			// Tako sto iz dupujemo
 			np->ofile[i] = filedup(curproc->ofile[i]);
-	np->cwd = idup(curproc->cwd);
+	np->cwd = idup(curproc->cwd); // Kopiramo cwd
 
+	// Kopiramo ime
 	safestrcpy(np->name, curproc->name, sizeof(curproc->name));
 
+	// Svaki proces ima svoj pid
 	pid = np->pid;
 
 	acquire(&ptable.lock);
 
+	// Stavimo kao runnable i vratimo
 	np->state = RUNNABLE;
 
 	release(&ptable.lock);
@@ -224,6 +272,8 @@ fork(void)
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait() to find out it exited.
+//
+// Kad se desi exit, mi zapravo zavrsavamo neki wait()
 void
 exit(void)
 {
@@ -235,6 +285,7 @@ exit(void)
 		panic("init exiting");
 
 	// Close all open files.
+	// Zatvara sve otvorene fajlove
 	for(fd = 0; fd < NOFILE; fd++){
 		if(curproc->ofile[fd]){
 			fileclose(curproc->ofile[fd]);
@@ -243,27 +294,28 @@ exit(void)
 	}
 
 	begin_op();
-	iput(curproc->cwd);
+	iput(curproc->cwd); // Otpusti current working directory
 	end_op();
 	curproc->cwd = 0;
 
 	acquire(&ptable.lock);
 
 	// Parent might be sleeping in wait().
+	// Probudi roditelja procesa
 	wakeup1(curproc->parent);
 
 	// Pass abandoned children to init.
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 		if(p->parent == curproc){
-			p->parent = initproc;
+			p->parent = initproc; // Stavlja parent na init
 			if(p->state == ZOMBIE)
 				wakeup1(initproc);
 		}
 	}
 
 	// Jump into the scheduler, never to return.
-	curproc->state = ZOMBIE;
-	sched();
+	curproc->state = ZOMBIE; // Stavljamo proces na zombie
+	sched(); // Tek kad uradimo sched ce onaj proces koji smo wakeupovali probuditi
 	panic("zombie exit");
 }
 
@@ -279,11 +331,17 @@ wait(void)
 	acquire(&ptable.lock);
 	for(;;){
 		// Scan through table looking for exited children.
+		// Skeniramo kroz tabelu i gledamo da li imamo
+		// Decu
 		havekids = 0;
 		for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
 			if(p->parent != curproc)
 				continue;
-			havekids = 1;
+			havekids = 1; // Imamo
+			// Ako je zombie onda smo docekali da jedan od nasih
+			// Podprocesa exituje
+			// Kada nadjemo zombija kao dete
+			// Oslobodi sve informacije o detetu
 			if(p->state == ZOMBIE){
 				// Found one.
 				pid = p->pid;
@@ -294,19 +352,23 @@ wait(void)
 				p->parent = 0;
 				p->name[0] = 0;
 				p->killed = 0;
-				p->state = UNUSED;
+				p->state = UNUSED; // Da bi posle opet mogao da se koristi
 				release(&ptable.lock);
+				// Ovo je uradjeno da bi roditelju bila vracena
+				// Informacija o id-u detetovog procesa
 				return pid;
 			}
 		}
 
 		// No point waiting if we don't have any children.
+		// Ako nemamo dece, ili je proces ubijen, otpusti lock
 		if(!havekids || curproc->killed){
 			release(&ptable.lock);
 			return -1;
 		}
 
 		// Wait for children to exit.  (See wakeup1 call in proc_exit.)
+		// U suprotnom, cekamo da neko wakeupuje nas proces
 		sleep(curproc, &ptable.lock);  //DOC: wait-sleep
 	}
 }
@@ -318,6 +380,9 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+//
+// Rasporedjivac je najbitniji deo kernela
+// Jedina stvar koja je samo za kernel
 void
 scheduler(void)
 {
@@ -390,10 +455,13 @@ sched(void)
 }
 
 // Give up the CPU for one scheduling round.
+// Otpustamo kontrolu procesora
 void
 yield(void)
 {
 	acquire(&ptable.lock);  //DOC: yieldlock
+	// Stavljamo stanje procesora na runnable
+	// I zovemo sched funkciju
 	myproc()->state = RUNNABLE;
 	sched();
 	release(&ptable.lock);
@@ -422,6 +490,8 @@ forkret(void)
 
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
+//
+// Ceka na kanalu chan i da otpusti lock privremeno
 void
 sleep(void *chan, struct spinlock *lk)
 {
@@ -447,7 +517,12 @@ sleep(void *chan, struct spinlock *lk)
 	p->chan = chan;
 	p->state = SLEEPING;
 
-	sched();
+	sched(); // Aktiviramo neki drugi proces za izvrsavanje
+	// Nakon sto smo stavili ovaj proces na spavanje
+
+	// Ovde stajemo i cekamo
+	// Neko zove wakeup, tj wakeup1 se zove...
+	// Skida se can na liniji dole
 
 	// Tidy up.
 	p->chan = 0;
@@ -455,7 +530,7 @@ sleep(void *chan, struct spinlock *lk)
 	// Reacquire original lock.
 	if(lk != &ptable.lock){  //DOC: sleeplock2
 		release(&ptable.lock);
-		acquire(lk);
+		acquire(lk); // Uzima lock koji smo otpustili malopre
 	}
 }
 
@@ -466,8 +541,12 @@ wakeup1(void *chan)
 {
 	struct proc *p;
 
+	// Prolazi kroz tabelu procesa
 	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
+		// Uzima sleeping proces koji ceka na kanalu
+		// Koji smo prosledili
 		if(p->state == SLEEPING && p->chan == chan)
+			// I stavlja taj proces na runnable
 			p->state = RUNNABLE;
 }
 

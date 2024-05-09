@@ -14,3 +14,71 @@ Postoje dve C strukture koje se koriste da opisu inode u xv6 sistemu:
     1. kernel/fs.h - struct dinode - inode kada je zapisan na disku
     2. kernel/file.h - struct inode - inode kada je ucitan u memoriju
 U oba slucaja je kljucan niz addrs koji sadrzi adrese blokova u kojima je zapisana datoteka koji opisuje ovaj inode
+
+Vezbe 6:
+Procesi su trenutno pokrenuti programi. Svaki proces za sebe
+ima vezane sledece podatke:
+    1. Lokaciju i velicinu u memoriji
+    2. Stek u kernelu
+    3. Stanje
+    4. Proces ID i informaciju o tome ko je roditelj
+    5. Trap frame za potrebe sistemskih poziva
+    6. Kontekst
+    7. Kanal na kojem je blokiran
+    8. Niz otvorenih datoteka
+    9. Trenutno aktivni direktorijum
+    10. Naziv
+Procesi su jedan tok izvrsavanja, gde svaki proces vrsi kod odvojeno jedan od drugog,
+pravolinijski. Te instrukcije izvrsava procesor, ali kernel garantuje
+da ce se one izvrsiti
+
+Stanje procesa naznacava koje operacije mogu da se obavljaju sa tim procesom:
+    1. Unused - slobodna stavka u nizu procesa
+    2. Embryo - tek kreiran, jos uvek nije spreman za izvrsavanje
+    3. Runnable - spreman za izvrsavanje, al nije na izvrsavanju
+    4. Running - na izvrsavanju, samo jedan proces sme da bude RUNNING, po CPU
+    5. Sleeping - blokiran nad nekim dogadjajem pomocu sleep()
+    6. Zombie - zavrsio se, cekamo da roditelj vrati stavku u UNUSED stanje
+
+Vezbe 8:
+Prvih 10 bitova virtuelne adrese kao indeks u page direktorijumu
+koji ce onda pokazivati na page table
+Iz kojih cemo uzeti 10 bitova kao indeks u page tablu
+koji ce pokazivati na fizicki okvir i uzecemo donjih 12 bitova
+(offset), i bukvalno ih prepisati na kraj adrese okvira
+i tako dobijamo adresu u fizickoj memoriji za logicku adresu
+
+Svi procesi u XV6 imaju svoj pgdir, tj svoju predstavu virtuelne memorije.
+
+Svaki proces ima svoj direktorijum stranica u kojem se nalaze dve vrste stavki:
+    1. Stranice za sam proces, rasporedjene u regionu memorije od 0 do KERNBASE.
+    Sve ove stranice imaju U bit setovan, tako da proces moze da im pristupa
+    2. Stranice kernela, rasporedjene u regionu memorije od KERNBASE do kraja. Sve ove stranice
+    nemaju U bit setovan, tako da moze da im se pristupa samo unutar kernela.
+
+Ovo znaci da nema potrebe da se direktorijum stranica menja pri silasku u kernel
+zbog prekida ili sistemskog poziva. Racun za konverziju iz virtuelnog u fizicki prostor
+i obrnuto je prilicno jednostavan.
+
+Nedostatak ovog pristupa je cinjenica da ne mozemo da koristimo vise od 2GB memorije,
+posto kernel zauzima 2GB. Makroi za konverziju iz virtuelnog u fizicki i obrnuto se nalaze u
+kernel/memlayout.h
+
+Pored direktorijuma za procese, postoji jedan direktorijum stranica koji
+opisuje kernel, i on se zove kpgdir. Njegova inicijalizacije moze da se vidi
+u funkciji kvmalloc(), u kernel/vm.c
+
+Ova inicijalizacija se oslanja na kernelov interni alokator za 
+stranice koji je opisan u kernel/kalloc.c
+
+Kernel održava listu slobodnih stranica koju koristi funkcija kalloc() kada treba alocirati nove stranice.
+Oslobađanje stranica se obavlja pomoću kfree(). Ove funkcije se nalaze u kernel/kalloc.c.
+
+Izbor trenutno aktivnog direktorijuma stranica se radi tako što se promeni vrednost u CR3 registru. Dve
+funkcije u kernel/vm.c koje to rade su:
+    1. switchkvm() kada treba da se izvršava raspoređivač
+    2. switchuvm() kada treba da se izvršava korisnički proces
+
+Inicijelna priprema korisničkog direktorijuma stranica se nalazi u:
+    1. userinit() - proc.c
+    2. fork() - proc.c

@@ -121,6 +121,8 @@ void            wakeup(void*);
 void            yield(void);
 
 // swtch.S
+// Ova funkcija nam sluzi da predjemo sa izvrsavanja jednog procesa
+// Na drugi
 void            swtch(struct context**, struct context*);
 
 // spinlock.c
