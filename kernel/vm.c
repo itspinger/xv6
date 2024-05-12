@@ -57,34 +57,20 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
 // Create PTEs for virtual addresses starting at va that refer to
 // physical addresses starting at pa. va and size might not
 // be page-aligned.
-//
-// Mapira stranice iz virtuelne u fizicke
-// Sa odredjenim permisijama
-static int
+int
 mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 {
 	char *a, *last;
 	pte_t *pte;
 
-	a = (char*)PGROUNDDOWN((uint)va); // Pocetak stranice
-	last = (char*)PGROUNDDOWN(((uint)va) + size - 1); // Kraj stranice
+	a = (char*)PGROUNDDOWN((uint)va);
+	last = (char*)PGROUNDDOWN(((uint)va) + size - 1);
 	for(;;){
-		// Vraca page table entry 
 		if((pte = walkpgdir(pgdir, a, 1)) == 0)
 			return -1;
-		// Ako je present
-		// Tj ako mapiramo region koji je vec mapiran, izbacujemo gresku
 		if(*pte & PTE_P)
 			panic("remap");
-		// Ako nije prezent na pte stavljamo
-		// Fizicku adresu koja je zaokruzena (donjih 12 bitova 0)
-		// Gornji deo sta god treba da bude
-		// OR-ujemo to sa permisijama
-		// I forsiramo da je ova stranica prezent
-		// I time smo hardveru rekli da je ova stranica mapirana
-		// I pokazuje na pa
 		*pte = pa | perm | PTE_P;
-		// Ako smo dosli do kraja, breakujemo
 		if(a == last)
 			break;
 		a += PGSIZE;
@@ -117,10 +103,10 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
 // This table defines the kernel's mappings, which are present in
 // every process's page table.
 static struct kmap {
-	void *virt; // Pocetak regiona
-	uint phys_start; // Pocetak odgovarajuceg regiona fizicke memorije
-	uint phys_end; // Zavrsetak odgovarajuceg regiona fizicke memorije
-	int perm; // Bitovi P, U, W
+	void *virt;
+	uint phys_start;
+	uint phys_end;
+	int perm;
 } kmap[] = {
 	{ (void*)KERNBASE, 0,             EXTMEM,    PTE_W}, // I/O space
 	{ (void*)KERNLINK, V2P(KERNLINK), V2P(data), 0},     // kern text+rodata
@@ -200,16 +186,9 @@ inituvm(pde_t *pgdir, char *init, uint sz)
 
 	if(sz >= PGSIZE)
 		panic("inituvm: more than a page");
-	// Alocira jednu stranicu u memoriji i prazni je
 	mem = kalloc();
 	memset(mem, 0, PGSIZE);
-	// Ubacujemo je u pgdir i mapiramo u page direktory
-	// Treba da bude zapisiva i treba da bude user
-	// Ovo je najosnovnija upotreba mappages-a, koja nam treba
-	// Za domaci
 	mappages(pgdir, 0, PGSIZE, V2P(mem), PTE_W|PTE_U);
-	// Stranicu popunjavamo nizom koji je prosledjen od strane
-	// korisnika
 	memmove(mem, init, sz);
 }
 
@@ -245,33 +224,20 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	char *mem;
 	uint a;
 
-	// Ako nova velicina prelazi gornju granicu
-	// To znaci da bismo hteli da alociramo vise od 2gb
-	// A to nam je najvise
 	if(newsz >= KERNBASE)
 		return 0;
 	if(newsz < oldsz)
 		return oldsz;
 
-	// Groundupujemo staru velicinu
 	a = PGROUNDUP(oldsz);
-	// Idemo od stranice koja nam treba
-	// Do nove stranice, stranicu po stranicu
 	for(; a < newsz; a += PGSIZE){
-		// Alociramo novu stranicu
 		mem = kalloc();
 		if(mem == 0){
 			cprintf("allocuvm out of memory\n");
-			// Cleanup u slucaju greske
 			deallocuvm(pgdir, newsz, oldsz);
 			return 0;
 		}
-		// Ispraznimo je
 		memset(mem, 0, PGSIZE);
-		// Mapiramo je u page dir na adresu a sto je trenutni itr (sl stranica)
-		// Mapiramo jednu stranicu
-		// I opet ovaj alocirani mem, pretvoren u fizicku adresu
-		// Alociramo je da bude zapisiva i korisnicka
 		if(mappages(pgdir, (char*)a, PGSIZE, V2P(mem), PTE_W|PTE_U) < 0){
 			cprintf("allocuvm out of memory (2)\n");
 			deallocuvm(pgdir, newsz, oldsz);
@@ -292,7 +258,6 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 	pte_t *pte;
 	uint a, pa;
 
-	// Ako nemamo gde sta da alociramo, samo vrati
 	if(newsz >= oldsz)
 		return oldsz;
 
@@ -303,7 +268,7 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 			a = PGADDR(PDX(a) + 1, 0, 0) - PGSIZE;
 		else if((*pte & PTE_P) != 0){
 			pa = PTE_ADDR(*pte);
-			if(pa == 0)
+			if(pa == 0) 
 				panic("kfree");
 			char *v = P2V(pa);
 			kfree(v);
@@ -350,39 +315,23 @@ clearpteu(pde_t *pgdir, char *uva)
 pde_t*
 copyuvm(pde_t *pgdir, uint sz)
 {
-	// Ovoj funkciji dajemo pgdir i velicinu koju treba da kopiramo
 	pde_t *d;
 	pte_t *pte;
 	uint pa, i, flags;
 	char *mem;
 
-	// Alociramo novi adresni prostor
 	if((d = setupkvm()) == 0)
 		return 0;
-	// Idemo od 0 do sz i uvecavamo za velicinu stranica
 	for(i = 0; i < sz; i += PGSIZE){
-		// U starom direktorijumu nalazimo adresu i, bez alokacija
-		// Jer ako kopiramo adresni prostor, nema razloga da alociramo ista
-		// Ako ne postoji
-		// I cuvamo je u pte
-		// Ako ne postoji, imamo adresni prostor sa rupama i panicimo
 		if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
 			panic("copyuvm: pte should exist");
-		// Nasli smo entry
-		// Provericemo sada da li stranica postoji
 		if(!(*pte & PTE_P))
 			panic("copyuvm: page not present");
-		// iz pte, izolujemo trenutno fizicku adresu stranice
-		// i trenutne zastavice
 		pa = PTE_ADDR(*pte);
 		flags = PTE_FLAGS(*pte);
-		// Alociramo novu stranicu
 		if((mem = kalloc()) == 0)
 			goto bad;
-		// U nju, kopiramo celu stranicu iz stare u novu
 		memmove(mem, (char*)P2V(pa), PGSIZE);
-		// I onda u novi page dir, mapiramo jednu stranicu
-		// I to bas ovu koju smo alocirali sa istim zastavicama
 		if(mappages(d, (void*)i, PGSIZE, V2P(mem), flags) < 0) {
 			kfree(mem);
 			goto bad;
@@ -390,9 +339,7 @@ copyuvm(pde_t *pgdir, uint sz)
 	}
 	return d;
 
-// U slucaju da se desi greska
 bad:
-	// Oslobodicemo page direktorijum
 	freevm(d);
 	return 0;
 }

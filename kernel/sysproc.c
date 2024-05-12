@@ -37,6 +37,48 @@ sys_kill(void)
 }
 
 int
+sys_shm_open(void) {
+	char* name;
+	if (argstr(0, &name) < 0) {
+		return -1;
+	}
+
+	return shm_open(name);
+}
+
+int
+sys_shm_trunc(void) {
+	int od, sz;
+	if (argint(0, &od) < 0 || argint(1, &sz) < 0) {
+		return -1;
+	}
+
+	return shm_trunc(od, sz);
+}
+
+int
+sys_shm_map(void) {
+	int od, flags;
+	void** va;
+	if (argint(0, &od) < 0 || argptr(1, (void**)&va, sizeof(void*)) < 0 || argint(2, &flags) < 0) {
+		return -1;
+	}
+
+	// Dodati handle za VA
+	return shm_map(od, va, flags);
+}
+
+int
+sys_shm_close(void) {
+	int od;
+	if (argint(0, &od) < 0) {
+		return -1;
+	}
+
+	return shm_close(od);
+}
+
+int
 sys_getpid(void)
 {
 	return myproc()->pid;

@@ -29,4 +29,7 @@ SYSCALL(getpid)
 SYSCALL(sbrk)
 SYSCALL(sleep)
 SYSCALL(uptime)
-SYSCALL(symlink);
+SYSCALL(shm_open)
+SYSCALL(shm_trunc)
+SYSCALL(shm_map)
+SYSCALL(shm_close)

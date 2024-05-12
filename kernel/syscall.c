@@ -103,12 +103,12 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
-extern int sys_symlink(void);
+extern int sys_shm_open(void);
+extern int sys_shm_trunc(void);
+extern int sys_shm_map(void);
+extern int sys_shm_close(void);
 
-// Niz pokazivaca na funkcije koje ne uzimaju nijedan argument
-// I vracaju int
 static int (*syscalls[])(void) = {
-// Mapire brojeve u funkcije	
 [SYS_fork]    sys_fork,
 [SYS_exit]    sys_exit,
 [SYS_wait]    sys_wait,
@@ -130,18 +130,19 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-[SYS_symlink] sys_symlink
+[SYS_shm_open] sys_shm_open,
+[SYS_shm_trunc] sys_shm_trunc,
+[SYS_shm_map] sys_shm_map,
+[SYS_shm_close] sys_shm_close
 };
 
 void
 syscall(void)
 {
 	int num;
-	struct proc *curproc = myproc(); // Uzima trenutni proces
+	struct proc *curproc = myproc();
 
-	num = curproc->tf->eax; // Iz njega vadi eax
-	// Gledamo da li je num u validnom opsegu
-	// I ako jeste vadimo funkciju za sistemski poziv
+	num = curproc->tf->eax;
 	if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
 		curproc->tf->eax = syscalls[num]();
 	} else {

@@ -7,7 +7,6 @@
 #include "x86.h"
 #include "elf.h"
 
-// Ucitava novi program
 int
 exec(char *path, char **argv)
 {
@@ -22,33 +21,25 @@ exec(char *path, char **argv)
 
 	begin_op();
 
-	// Ucitava fajl
 	if((ip = namei(path)) == 0){
 		end_op();
 		cprintf("exec: fail\n");
 		return -1;
 	}
-
-	// Lockuje ga
 	ilock(ip);
 	pgdir = 0;
 
 	// Check ELF header
-	// Ucitamo elf header
 	if(readi(ip, (char*)&elf, 0, sizeof(elf)) != sizeof(elf))
 		goto bad;
-	// Ako prva 4 bajta nisu izvrsni program
 	if(elf.magic != ELF_MAGIC)
 		goto bad;
 
-	// Rezervisemo novi pgdir
 	if((pgdir = setupkvm()) == 0)
 		goto bad;
 
 	// Load program into memory.
-	// Za pocetak pocinjemo sa praznim memorijskim prostorom
 	sz = 0;
-	// Iteriramo programski header
 	for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
 		if(readi(ip, (char*)&ph, off, sizeof(ph)) != sizeof(ph))
 			goto bad;
@@ -75,28 +66,21 @@ exec(char *path, char **argv)
 	if((sz = allocuvm(pgdir, sz, sz + 2*PGSIZE)) == 0)
 		goto bad;
 	clearpteu(pgdir, (char*)(sz - 2*PGSIZE));
-	sp = sz; // Cuvamo vrh userskog stacka sa sp
+	sp = sz;
 
 	// Push argument strings, prepare rest of stack in ustack.
 	for(argc = 0; argv[argc]; argc++) {
-		// Ako se desi da imamo previse argumenata
-		// Vracamo gresku
 		if(argc >= MAXARG)
 			goto bad;
-		// Pushujemo string na stack
 		sp = (sp - (strlen(argv[argc]) + 1)) & ~3;
-		// U taj stek iskopiramo sam string
 		if(copyout(pgdir, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
 			goto bad;
-		// Na stek sacuvamo jedan ovaj argument, tj pokazivac na njega
 		ustack[3+argc] = sp;
 	}
 	ustack[3+argc] = 0;
 
-	// Ako program vrati 0xffffffff
-	// Znaci da smo zaboravili da zovemo exit() u mainu
 	ustack[0] = 0xffffffff;  // fake return PC
-	ustack[1] = argc; // Kao jedan argument stavljamo argc
+	ustack[1] = argc;
 	ustack[2] = sp - (argc+1)*4;  // argv pointer
 
 	sp -= (3+argc+1) * 4;
@@ -116,7 +100,7 @@ exec(char *path, char **argv)
 	curproc->tf->eip = elf.entry;  // main
 	curproc->tf->esp = sp;
 	switchuvm(curproc);
-	freevm(oldpgdir); // Brisemo stari adresni prostor
+	freevm(oldpgdir);
 	return 0;
 
 	bad:
