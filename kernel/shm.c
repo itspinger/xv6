@@ -33,8 +33,6 @@ shmalloc(void)
         }
     }
 
-    cprintf("Making\n");
-
     release(&shmtable.lock);
     return 0;
 }
@@ -258,7 +256,7 @@ shm_map(int od, void **va, int flags) {
         f |= PTE_W;
     }
 
-    void* cva = (void*) P2V(KERNBASE/2 + 1);
+    void* cva = (void*) P2V(KERNBASE/2 + 1); // Bez P2V ne radi
     for (int i = 0; i < PGS(s->size); i++) {
         if (mappages(curproc->pgdir, cva, PGSIZE, (uint) V2P(s->pgs[i]), PTE_U|PTE_W) < 0) {
             kfree(s->pgs[i]);
@@ -279,12 +277,14 @@ void unmap(pde_t *pgdir, void *va) {
     pte = walkpgdir(pgdir, va, 0);
     if (pte != 0) {
         *pte = 0; // Postavite PTE na nulu
+        cprintf("The mapping is for %d\n", *pte);
         cprintf("Stavljamo pte na nulu\n");
     }
 }
 
 int
 shm_close(int od) {
+    acquire(&shmtable.lock);
     struct proc *curproc = myproc();
     struct shmo *s;
 
@@ -293,14 +293,14 @@ shm_close(int od) {
         return -1;
     }
 
+    release(&shmtable.lock);
     shmclose(s);
+    acquire(&shmtable.lock);
 
     if (curproc->vpgs[od]) {
         cprintf("Should clear\n");
         unmap(curproc->pgdir, curproc->vpgs[od]);
     }
-
-    acquire(&shmtable.lock);
 
     //if (curproc->vpgs[od]) {
         //if (!deallocuvm(curproc->pgdir, curproc->vpgs[od] + s->size, curproc->vpgs[od])) {
