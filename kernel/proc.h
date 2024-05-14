@@ -46,7 +46,8 @@ struct proc {
 	void *chan;                  // If non-zero, sleeping on chan
 	int killed;                  // If non-zero, have been killed
 	struct file *ofile[NOFILE];  // Open files
-	struct shmo *oshmo[NOSHMO];   // Open shared memory objects
+	struct shmo *oshmo[NOSHMO];  // Open shared memory objects
+	char* vpgs[NOSHMO];			 // Virtual addreses of each shmo object
 	struct inode *cwd;           // Current directory
 	char name[16];               // Process name (debugging)
 };

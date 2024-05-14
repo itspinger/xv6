@@ -60,7 +60,7 @@ int
 sys_shm_map(void) {
 	int od, flags;
 	void** va;
-	if (argint(0, &od) < 0 || argptr(1, (void**)&va, sizeof(void*)) < 0 || argint(2, &flags) < 0) {
+	if (argint(0, &od) < 0 || argptr(1, (void*)&va, sizeof(void*)) < 0 || argint(2, &flags) < 0) {
 		return -1;
 	}
 

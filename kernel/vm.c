@@ -32,7 +32,7 @@ seginit(void)
 // Return the address of the PTE in page table pgdir
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page table pages.
-static pte_t *
+pte_t *
 walkpgdir(pde_t *pgdir, const void *va, int alloc)
 {
 	pde_t *pde;
@@ -322,6 +322,7 @@ copyuvm(pde_t *pgdir, uint sz)
 
 	if((d = setupkvm()) == 0)
 		return 0;
+	cprintf("Copying from %d to %d\n", i, sz);
 	for(i = 0; i < sz; i += PGSIZE){
 		if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
 			panic("copyuvm: pte should exist");

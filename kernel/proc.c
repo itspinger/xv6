@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "shm.h"
 
 struct {
 	struct spinlock lock;
@@ -209,8 +210,22 @@ fork(void)
 	np->cwd = idup(curproc->cwd);
 
 	for (i = 0; i < NOSHMO; i++) {
-		if (curproc->oshmo[i])
+		if (curproc->vpgs[i]) {
+			np->vpgs[i] = curproc->vpgs[i];
+		}
+		if (curproc->oshmo[i]) {
 			np->oshmo[i] = shmdup(curproc->oshmo[i]); // Napravi dup funkciju
+			// Map the pages
+			struct shmo *sh = np->oshmo[i];
+			for (int j = 0; j < PGS(sh->size); j++) {
+				pte_t *pte = walkpgdir(curproc->pgdir, curproc->vpgs[i], 0);
+				if (!pte) {
+					continue;
+				}
+				cprintf("Mapping!\n");
+				mappages(np->pgdir, np->vpgs[i], PGSIZE, V2P(sh->pgs[j]), (uint) PTE_FLAGS(*pte));
+			}
+		}
 	}
 
 	safestrcpy(np->name, curproc->name, sizeof(curproc->name));
