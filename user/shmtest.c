@@ -62,7 +62,6 @@ int test2(void)
 	if(fork())
 	{
 		wait();
-		printf("%d %d\n", p[0], p[1]);
 		if(p[0] == 42 && p[1] == 42)
 		{
 			printf("Test 2 OK (if no other errors appeared)\n");
@@ -73,14 +72,12 @@ int test2(void)
 
 	if(fork())
 	{
-		printf("hello\n");
 		p[0] = 42;
 		shm_close(fd);
 		wait();
 	}
 	else
 	{
-		printf("hello 2\n");
 		p[1] = 42;
 		shm_close(fd);
 	}
@@ -216,7 +213,6 @@ int test6(void)
 			ok = 0;
 			break;
 		}
-		printf("ID je %d\n", id);
 
 		if (shm_trunc(id, step) < 0) {
 			printf("failed to trunc despite closing..\n");
@@ -224,7 +220,6 @@ int test6(void)
 			ok = 0;
 			break;
 		}
-		printf("Uspeli smo\n");
 		if (shm_map(id, &foo, O_RDWR) < 0) {
 			shm_close(id);
 			printf("failed to map %x despite closing..\n",

@@ -199,6 +199,7 @@ fork(void)
 	}
 	np->sz = curproc->sz;
 	np->parent = curproc;
+	np->lva = (KERNBASE/2);
 	*np->tf = *curproc->tf;
 
 	// Clear %eax so that fork returns 0 in the child.
@@ -209,20 +210,29 @@ fork(void)
 			np->ofile[i] = filedup(curproc->ofile[i]);
 	np->cwd = idup(curproc->cwd);
 
+	// Set the lva to (KERNBASE/2) since we want to use continuous regions
+	//np->lva = (KERNBASE/2);
+
 	for (i = 0; i < NOSHMO; i++) {
 		if (curproc->vpgs[i]) {
 			np->vpgs[i] = curproc->vpgs[i];
 		}
+		// If shmo object is present
 		if (curproc->oshmo[i]) {
-			np->oshmo[i] = shmdup(curproc->oshmo[i]); // Napravi dup funkciju
-			// Map the pages
+			np->oshmo[i] = shmdup(curproc->oshmo[i]); // Make a duplicate
+			if (!curproc->vpgs[i]) {
+				continue;
+			}
+
 			struct shmo *sh = np->oshmo[i];
+
+			// If the object is mapped in the previous proc
+			// We also need to map it in the fork
 			for (int j = 0; j < PGS(sh->size); j++) {
 				pte_t *pte = walkpgdir(curproc->pgdir, curproc->vpgs[i], 0);
 				if (!pte) {
 					continue;
 				}
-				cprintf("Mapping!\n");
 				mappages(np->pgdir, np->vpgs[i], PGSIZE, V2P(sh->pgs[j]), (uint) PTE_FLAGS(*pte));
 			}
 		}
@@ -269,6 +279,8 @@ exit(void)
 			curproc->oshmo[od] = 0;
 		}
 	}
+
+	curproc->lva = 0;
 
 	begin_op();
 	iput(curproc->cwd);

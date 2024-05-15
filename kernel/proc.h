@@ -48,6 +48,7 @@ struct proc {
 	struct file *ofile[NOFILE];  // Open files
 	struct shmo *oshmo[NOSHMO];  // Open shared memory objects
 	char* vpgs[NOSHMO];			 // Virtual addreses of each shmo object
+	int lva;					 // Last virtual address used by shmo object in this process (default KERNBASE)
 	struct inode *cwd;           // Current directory
 	char name[16];               // Process name (debugging)
 };

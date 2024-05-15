@@ -1,5 +1,6 @@
 #define NPAGES 32
 #define PGS(sz) ((sz + PGSIZE - 1) / PGSIZE)
+#define ADDR(proc) ((void*) P2V(proc->lva))
 
 struct shmo {
     char name[64]; 
